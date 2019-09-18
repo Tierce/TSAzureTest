@@ -1,6 +1,7 @@
 {
 	"name": "Staging2Prod",
 	"properties": {
+		"description": "This is a Data Flow for SCD type 2",
 		"activities": [
 			{
 				"name": "Staging2Prod",
