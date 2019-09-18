@@ -1,6 +1,7 @@
 {
 	"name": "Test SSIS",
 	"properties": {
+		"description": "pls let this work",
 		"activities": [
 			{
 				"name": "Execute SSIS Package1",
