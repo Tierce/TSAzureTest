@@ -1,0 +1,29 @@
+{
+	"name": "Trigger_2de",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Stopped",
+		"pipeline": {
+			"pipelineReference": {
+				"referenceName": "DeltaCopyFromBlobPipeline",
+				"type": "PipelineReference"
+			},
+			"parameters": {
+				"windowStart": "@trigger().outputs.windowStartTime",
+				"windowEnd": "@trigger().outputs.windowEndTime"
+			}
+		},
+		"type": "TumblingWindowTrigger",
+		"typeProperties": {
+			"frequency": "Minute",
+			"interval": 15,
+			"startTime": "2019-09-09T08:27:00Z",
+			"delay": "00:00:00",
+			"maxConcurrency": 50,
+			"retryPolicy": {
+				"intervalInSeconds": 30
+			},
+			"dependsOn": []
+		}
+	}
+}

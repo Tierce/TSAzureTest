@@ -1,0 +1,24 @@
+{
+	"name": "HourlyTrigger",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Stopped",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "HourlyJsonCopyFileStructure",
+					"type": "PipelineReference"
+				}
+			}
+		],
+		"type": "ScheduleTrigger",
+		"typeProperties": {
+			"recurrence": {
+				"frequency": "Hour",
+				"interval": 1,
+				"startTime": "2019-09-09T05:49:00Z",
+				"timeZone": "UTC"
+			}
+		}
+	}
+}

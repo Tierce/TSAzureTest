@@ -1,0 +1,32 @@
+{
+	"name": "Staging2Prod",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "StagingDBTable",
+						"type": "DatasetReference"
+					},
+					"name": "SourceStaging"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "ProdDBTable",
+						"type": "DatasetReference"
+					},
+					"name": "SinkProdPerson"
+				}
+			],
+			"transformations": [
+				{
+					"name": "AddSCDDates"
+				}
+			],
+			"script": "\n\nsource(output(\n\t\tID as integer,\n\t\tName as string,\n\t\tEmail as string,\n\t\tPhone as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tinferDriftedColumnTypes: true,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> SourceStaging\nSourceStaging derive(SCDStartDate = currentUTC('Asia/Singapore'),\n\t\tSCDEndDate = addMonths(currentUTC('Asia/Singapore'), 9999),\n\t\tHashChkSum = md5(iif(isNull(Name), '', toString(Name))+\r\niif(isNull(Phone), '', toString(Phone)))) ~> AddSCDDates\nAddSCDDates sink(input(\n\t\tName as string,\n\t\tEmail as string,\n\t\tPhone as string,\n\t\tStartDate as timestamp,\n\t\tEndDate as timestamp,\n\t\tChkSum as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'table',\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tmapColumn(\n\t\tName,\n\t\tEmail,\n\t\tPhone,\n\t\tStartDate = SCDStartDate,\n\t\tEndDate = SCDEndDate,\n\t\tChkSum = HashChkSum\n\t)) ~> SinkProdPerson"
+		}
+	}
+}

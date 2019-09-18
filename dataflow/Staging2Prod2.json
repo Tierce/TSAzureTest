@@ -1,0 +1,81 @@
+{
+	"name": "Staging2Prod2",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "ProdDBTable",
+						"type": "DatasetReference"
+					},
+					"name": "SourceProdPersons"
+				},
+				{
+					"dataset": {
+						"referenceName": "StagingDBTable",
+						"type": "DatasetReference"
+					},
+					"name": "SourceStagingPerson"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "ProdDBTable",
+						"type": "DatasetReference"
+					},
+					"name": "sink1"
+				}
+			],
+			"transformations": [
+				{
+					"name": "FilterActiveRecords"
+				},
+				{
+					"name": "RenameDWforVisibility"
+				},
+				{
+					"name": "Lookup1"
+				},
+				{
+					"name": "ConditionalSplit1"
+				},
+				{
+					"name": "DerivedColumn1"
+				},
+				{
+					"name": "SelectNewRecordFields"
+				},
+				{
+					"name": "AddHash"
+				},
+				{
+					"name": "DerivedColumn2"
+				},
+				{
+					"name": "SelectNewUpdateRecordFields"
+				},
+				{
+					"name": "DerivedColumn3"
+				},
+				{
+					"name": "SelectOldUpdateRecordFields"
+				},
+				{
+					"name": "Union1"
+				},
+				{
+					"name": "Union2"
+				},
+				{
+					"name": "AlterRow1"
+				},
+				{
+					"name": "RenameField2Sink"
+				}
+			],
+			"script": "\n\nsource(output(\n\t\tName as string,\n\t\tEmail as string,\n\t\tPhone as string,\n\t\tStartDate as timestamp,\n\t\tEndDate as timestamp,\n\t\tChkSum as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> SourceProdPersons\nsource(output(\n\t\tID as integer,\n\t\tName as string,\n\t\tEmail as string,\n\t\tPhone as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> SourceStagingPerson\nSourceProdPersons filter(EndDate > addMonths(currentUTC(), 99)) ~> FilterActiveRecords\nFilterActiveRecords select(mapColumn(\n\t\tDW_Name = Name,\n\t\tDW_Email = Email,\n\t\tDW_Phone = Phone,\n\t\tDW_StartDate = StartDate,\n\t\tDW_EndDate = EndDate,\n\t\tDW_ChkSum = ChkSum\n\t)) ~> RenameDWforVisibility\nAddHash, RenameDWforVisibility lookup(Email == DW_Email,\n\tbroadcast: 'none')~> Lookup1\nLookup1 split(isNull(DW_Email),\n\t!isNull(DW_Email) && notEquals(ChkSum, DW_ChkSum),\n\tdisjoint: false) ~> ConditionalSplit1@(NewRecords, UpdateRecords, IgnoreRecords)\nConditionalSplit1@NewRecords derive(NewStartDate = currentUTC('Asia/Singapore'),\n\t\tNewEndDate = addMonths(currentUTC('Asia/Singapore'), 999)) ~> DerivedColumn1\nDerivedColumn1 select(mapColumn(\n\t\tDW_Name = Name,\n\t\tDW_Email = Email,\n\t\tDW_Phone = Phone,\n\t\tDW_ChkSum = ChkSum,\n\t\tDW_StartDate = NewStartDate,\n\t\tDW_EndDate = NewEndDate\n\t)) ~> SelectNewRecordFields\nSourceStagingPerson derive(ChkSum = md5(\r\niif(isNull(Name), '',toString(Name)) +\r\niif(isNull(Phone), '',toString(Phone))\r\n)) ~> AddHash\nConditionalSplit1@UpdateRecords derive(NewStartDate = currentUTC('Asia/Singapore'),\n\t\tNewEndDate = addMonths(currentUTC('Asia/Singapore'), 999)) ~> DerivedColumn2\nDerivedColumn2 select(mapColumn(\n\t\tDW_Name = Name,\n\t\tDW_Email = Email,\n\t\tDW_Phone = Phone,\n\t\tDW_ChkSum = ChkSum,\n\t\tDW_StartDate = NewStartDate,\n\t\tDW_EndDate = NewEndDate\n\t)) ~> SelectNewUpdateRecordFields\nConditionalSplit1@UpdateRecords derive(NewEndDate = currentUTC('Asia/Singapore')) ~> DerivedColumn3\nDerivedColumn3 select(mapColumn(\n\t\tDW_Name,\n\t\tDW_Email,\n\t\tDW_Phone,\n\t\tDW_StartDate,\n\t\tDW_ChkSum,\n\t\tDW_EndDate = NewEndDate\n\t)) ~> SelectOldUpdateRecordFields\nSelectNewRecordFields, SelectNewUpdateRecordFields union(byName: true)~> Union1\nUnion1, SelectOldUpdateRecordFields union(byName: true)~> Union2\nUnion2 alterRow(insertIf(DW_EndDate>currentUTC('Asia/Singapore')),\n\tupdateIf(DW_EndDate<=currentUTC('Asia/Singapore'))) ~> AlterRow1\nAlterRow1 select(mapColumn(\n\t\tName = DW_Name,\n\t\tEmail = DW_Email,\n\t\tPhone = DW_Phone,\n\t\tChkSum = DW_ChkSum,\n\t\tStartDate = DW_StartDate,\n\t\tEndDate = DW_EndDate\n\t)) ~> RenameField2Sink\nRenameField2Sink sink(input(\n\t\tName as string,\n\t\tEmail as string,\n\t\tPhone as string,\n\t\tStartDate as timestamp,\n\t\tEndDate as timestamp,\n\t\tChkSum as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'table',\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:true,\n\tkeys:['Email']) ~> sink1"
+		}
+	}
+}

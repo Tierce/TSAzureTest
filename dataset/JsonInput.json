@@ -1,0 +1,46 @@
+{
+	"name": "JsonInput",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "HttpServer1",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "HttpFile",
+		"structure": [
+			{
+				"name": "userId",
+				"type": "Int64"
+			},
+			{
+				"name": "id",
+				"type": "Int64"
+			},
+			{
+				"name": "title",
+				"type": "String"
+			},
+			{
+				"name": "body",
+				"type": "String"
+			}
+		],
+		"typeProperties": {
+			"format": {
+				"type": "JsonFormat",
+				"filePattern": "setOfObjects",
+				"jsonPathDefinition": {
+					"userId": "$.['userId']",
+					"id": "$.['id']",
+					"title": "$.['title']",
+					"body": "$.['body']"
+				}
+			},
+			"relativeUrl": "",
+			"requestMethod": "GET",
+			"additionalHeaders": "",
+			"requestBody": ""
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}
