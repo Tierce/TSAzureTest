@@ -22,7 +22,7 @@
 					},
 					"environmentPath": null,
 					"connectVia": {
-						"referenceName": "SSISTestRuntime",
+						"referenceName": "integrationRuntime1",
 						"type": "IntegrationRuntimeReference"
 					},
 					"loggingLevel": "Verbose"
