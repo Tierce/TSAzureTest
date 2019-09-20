@@ -1,0 +1,596 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory Name",
+			"defaultValue": "TSDataLoad"
+		},
+		"Trigger_2de_properties_pipeline_parameters_windowStart": {
+			"type": "string",
+			"defaultValue": "@trigger().outputs.windowStartTime"
+		},
+		"Trigger_2de_properties_pipeline_parameters_windowEnd": {
+			"type": "string",
+			"defaultValue": "@trigger().outputs.windowEndTime"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/testjsonoutput')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "AzureDataLakeStorage1",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@CONCAT(formatDateTime(addhours(utcnow(),8),'yyyy'),\n'/',\nformatDateTime(addhours(utcnow(),8),'MMMM'),\n'/',\n'Test ', \nformatDateTime(addhours(utcnow(),8),'yyyy-MM-dd-HH'),\n '.csv')",
+							"type": "Expression"
+						},
+						"folderPath": "Raw",
+						"fileSystem": "testbigblob"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "userid",
+						"type": "String"
+					},
+					{
+						"name": "id",
+						"type": "String"
+					},
+					{
+						"name": "title",
+						"type": "String"
+					},
+					{
+						"name": "body",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DeltaCopyFromBlobPipeline')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "JSON Delta Copy based on last modified date",
+				"activities": [
+					{
+						"name": "Copy_2de",
+						"type": "Copy",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [
+							{
+								"name": "Source",
+								"value": "testbigblob/Raw/2019/"
+							},
+							{
+								"name": "Destination",
+								"value": "testbigblob/TestIncremental/"
+							}
+						],
+						"typeProperties": {
+							"source": {
+								"type": "BinarySource",
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true,
+									"wildcardFileName": "*.*",
+									"modifiedDatetimeStart": {
+										"value": "@pipeline().parameters.windowStart",
+										"type": "Expression"
+									},
+									"modifiedDatetimeEnd": {
+										"value": "@pipeline().parameters.windowEnd",
+										"type": "Expression"
+									}
+								}
+							},
+							"sink": {
+								"type": "BinarySink",
+								"storeSettings": {
+									"type": "AzureBlobFSWriteSettings"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "DeltaCopyFromRaw",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "DeltaCopy2TestIncremental",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						]
+					}
+				],
+				"parameters": {
+					"windowStart": {
+						"type": "String"
+					},
+					"windowEnd": {
+						"type": "String"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/HourlyJsonCopyFileStructure')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Copy Data1",
+						"type": "Copy",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "HttpSource",
+								"httpRequestTimeout": "00:01:40"
+							},
+							"sink": {
+								"type": "DelimitedTextSink",
+								"storeSettings": {
+									"type": "AzureBlobFSWriteSettings"
+								},
+								"formatSettings": {
+									"type": "DelimitedTextWriteSettings",
+									"quoteAllText": true,
+									"fileExtension": ".csv"
+								}
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"mappings": [
+									{
+										"source": {
+											"name": "userId"
+										},
+										"sink": {
+											"name": "userid",
+											"type": "Int64"
+										}
+									},
+									{
+										"source": {
+											"name": "id"
+										},
+										"sink": {
+											"name": "id",
+											"type": "Int64"
+										}
+									},
+									{
+										"source": {
+											"name": "title"
+										},
+										"sink": {
+											"name": "title",
+											"type": "String"
+										}
+									},
+									{
+										"source": {
+											"name": "body"
+										},
+										"sink": {
+											"name": "body",
+											"type": "String"
+										}
+									}
+								]
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "JsonInput",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "testjsonoutput",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						]
+					}
+				],
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/testjsonoutput')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadData2SQL')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "CopyToStagingTable",
+						"type": "Copy",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "DelimitedTextSource",
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true,
+									"wildcardFileName": "*.*"
+								},
+								"formatSettings": {
+									"type": "DelimitedTextReadSettings"
+								}
+							},
+							"sink": {
+								"type": "AzureSqlSink",
+								"tableOption": "autoCreate"
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"mappings": [
+									{
+										"source": {
+											"name": "Name",
+											"type": "String"
+										},
+										"sink": {
+											"name": "Name",
+											"type": "String"
+										}
+									},
+									{
+										"source": {
+											"name": "Email",
+											"type": "String"
+										},
+										"sink": {
+											"name": "Email",
+											"type": "String"
+										}
+									},
+									{
+										"source": {
+											"name": "Phone",
+											"type": "String"
+										},
+										"sink": {
+											"name": "Phone",
+											"type": "String"
+										}
+									}
+								]
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "Importfromblob",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "AzureSqlTable1",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						]
+					},
+					{
+						"name": "UpsertPersonTable",
+						"description": "Upserts the Person table from initial data loaded into the stagingperson table, then empties the staging table",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "CopyToStagingTable",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dbo].[PersonMergeData]"
+						},
+						"linkedServiceName": {
+							"referenceName": "AzureSqlDatabase1",
+							"type": "LinkedServiceReference"
+						}
+					}
+				],
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Staging2Prod')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "StagingDBTable",
+								"type": "DatasetReference"
+							},
+							"name": "SourceStaging",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ProdDBTable",
+								"type": "DatasetReference"
+							},
+							"name": "SinkProdPerson"
+						}
+					],
+					"transformations": [
+						{
+							"name": "AddSCDDates"
+						}
+					],
+					"script": "\n\nsource(output(\n\t\tID as integer,\n\t\tName as string,\n\t\tEmail as string,\n\t\tPhone as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tinferDriftedColumnTypes: true,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> SourceStaging\nSourceStaging derive(SCDStartDate = currentUTC('Asia/Singapore'),\n\t\tSCDEndDate = addMonths(currentUTC('Asia/Singapore'), 9999),\n\t\tHashChkSum = md5(iif(isNull(Name), '', toString(Name))+\r\niif(isNull(Phone), '', toString(Phone)))) ~> AddSCDDates\nAddSCDDates sink(input(\n\t\tName as string,\n\t\tEmail as string,\n\t\tPhone as string,\n\t\tStartDate as timestamp,\n\t\tEndDate as timestamp,\n\t\tChkSum as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'table',\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tmapColumn(\n\t\tName,\n\t\tEmail,\n\t\tPhone,\n\t\tStartDate = SCDStartDate,\n\t\tEndDate = SCDEndDate,\n\t\tChkSum = HashChkSum\n\t)) ~> SinkProdPerson"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Staging2Prod2')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ProdDBTable",
+								"type": "DatasetReference"
+							},
+							"name": "SourceProdPersons",
+							"typeProperties": {}
+						},
+						{
+							"dataset": {
+								"referenceName": "StagingDBTable",
+								"type": "DatasetReference"
+							},
+							"name": "SourceStagingPerson",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ProdDBTable",
+								"type": "DatasetReference"
+							},
+							"name": "sink1"
+						}
+					],
+					"transformations": [
+						{
+							"name": "FilterActiveRecords"
+						},
+						{
+							"name": "RenameDWforVisibility"
+						},
+						{
+							"name": "Lookup1"
+						},
+						{
+							"name": "ConditionalSplit1"
+						},
+						{
+							"name": "DerivedColumn1"
+						},
+						{
+							"name": "SelectNewRecordFields"
+						},
+						{
+							"name": "AddHash"
+						},
+						{
+							"name": "DerivedColumn2"
+						},
+						{
+							"name": "SelectNewUpdateRecordFields"
+						},
+						{
+							"name": "DerivedColumn3"
+						},
+						{
+							"name": "SelectOldUpdateRecordFields"
+						},
+						{
+							"name": "Union1"
+						},
+						{
+							"name": "Union2"
+						},
+						{
+							"name": "AlterRow1"
+						},
+						{
+							"name": "RenameField2Sink"
+						}
+					],
+					"script": "\n\nsource(output(\n\t\tName as string,\n\t\tEmail as string,\n\t\tPhone as string,\n\t\tStartDate as timestamp,\n\t\tEndDate as timestamp,\n\t\tChkSum as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> SourceProdPersons\nsource(output(\n\t\tID as integer,\n\t\tName as string,\n\t\tEmail as string,\n\t\tPhone as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> SourceStagingPerson\nSourceProdPersons filter(EndDate > addMonths(currentUTC(), 99)) ~> FilterActiveRecords\nFilterActiveRecords select(mapColumn(\n\t\tDW_Name = Name,\n\t\tDW_Email = Email,\n\t\tDW_Phone = Phone,\n\t\tDW_StartDate = StartDate,\n\t\tDW_EndDate = EndDate,\n\t\tDW_ChkSum = ChkSum\n\t)) ~> RenameDWforVisibility\nAddHash, RenameDWforVisibility lookup(Email == DW_Email,\n\tbroadcast: 'none')~> Lookup1\nLookup1 split(isNull(DW_Email),\n\t!isNull(DW_Email) && notEquals(ChkSum, DW_ChkSum),\n\tdisjoint: false) ~> ConditionalSplit1@(NewRecords, UpdateRecords, IgnoreRecords)\nConditionalSplit1@NewRecords derive(NewStartDate = currentUTC('Asia/Singapore'),\n\t\tNewEndDate = addMonths(currentUTC('Asia/Singapore'), 999)) ~> DerivedColumn1\nDerivedColumn1 select(mapColumn(\n\t\tDW_Name = Name,\n\t\tDW_Email = Email,\n\t\tDW_Phone = Phone,\n\t\tDW_ChkSum = ChkSum,\n\t\tDW_StartDate = NewStartDate,\n\t\tDW_EndDate = NewEndDate\n\t)) ~> SelectNewRecordFields\nSourceStagingPerson derive(ChkSum = md5(\r\niif(isNull(Name), '',toString(Name)) +\r\niif(isNull(Phone), '',toString(Phone))\r\n)) ~> AddHash\nConditionalSplit1@UpdateRecords derive(NewStartDate = currentUTC('Asia/Singapore'),\n\t\tNewEndDate = addMonths(currentUTC('Asia/Singapore'), 999)) ~> DerivedColumn2\nDerivedColumn2 select(mapColumn(\n\t\tDW_Name = Name,\n\t\tDW_Email = Email,\n\t\tDW_Phone = Phone,\n\t\tDW_ChkSum = ChkSum,\n\t\tDW_StartDate = NewStartDate,\n\t\tDW_EndDate = NewEndDate\n\t)) ~> SelectNewUpdateRecordFields\nConditionalSplit1@UpdateRecords derive(NewEndDate = currentUTC('Asia/Singapore')) ~> DerivedColumn3\nDerivedColumn3 select(mapColumn(\n\t\tDW_Name,\n\t\tDW_Email,\n\t\tDW_Phone,\n\t\tDW_StartDate,\n\t\tDW_ChkSum,\n\t\tDW_EndDate = NewEndDate\n\t)) ~> SelectOldUpdateRecordFields\nSelectNewRecordFields, SelectNewUpdateRecordFields union(byName: true)~> Union1\nUnion1, SelectOldUpdateRecordFields union(byName: true)~> Union2\nUnion2 alterRow(insertIf(DW_EndDate>currentUTC('Asia/Singapore')),\n\tupdateIf(DW_EndDate<=currentUTC('Asia/Singapore'))) ~> AlterRow1\nAlterRow1 select(mapColumn(\n\t\tName = DW_Name,\n\t\tEmail = DW_Email,\n\t\tPhone = DW_Phone,\n\t\tChkSum = DW_ChkSum,\n\t\tStartDate = DW_StartDate,\n\t\tEndDate = DW_EndDate\n\t)) ~> RenameField2Sink\nRenameField2Sink sink(input(\n\t\tName as string,\n\t\tEmail as string,\n\t\tPhone as string,\n\t\tStartDate as timestamp,\n\t\tEndDate as timestamp,\n\t\tChkSum as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'table',\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:true,\n\tkeys:['Email']) ~> sink1"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Staging2Prod')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "This is a Data Flow for SCD type 2",
+				"activities": [
+					{
+						"name": "Staging2Prod",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "Staging2Prod2",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"SourceProdPersons": {},
+									"SourceStagingPerson": {},
+									"sink1": {}
+								}
+							},
+							"staging": {}
+						}
+					}
+				],
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/Staging2Prod2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/HourlyTrigger')]",
+			"type": "Microsoft.DataFactory/factories/triggers",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Stopped",
+				"pipelines": [
+					{
+						"pipelineReference": {
+							"referenceName": "HourlyJsonCopyFileStructure",
+							"type": "PipelineReference"
+						},
+						"parameters": {}
+					}
+				],
+				"type": "ScheduleTrigger",
+				"typeProperties": {
+					"recurrence": {
+						"frequency": "Hour",
+						"interval": 1,
+						"startTime": "2019-09-09T05:49:00Z",
+						"timeZone": "UTC"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/HourlyJsonCopyFileStructure')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Trigger_2de')]",
+			"type": "Microsoft.DataFactory/factories/triggers",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Stopped",
+				"pipeline": {
+					"pipelineReference": {
+						"referenceName": "DeltaCopyFromBlobPipeline",
+						"type": "PipelineReference"
+					},
+					"parameters": {
+						"windowStart": "[parameters('Trigger_2de_properties_pipeline_parameters_windowStart')]",
+						"windowEnd": "[parameters('Trigger_2de_properties_pipeline_parameters_windowEnd')]"
+					}
+				},
+				"type": "TumblingWindowTrigger",
+				"typeProperties": {
+					"frequency": "Minute",
+					"interval": 15,
+					"startTime": "2019-09-09T08:27:00Z",
+					"delay": "00:00:00",
+					"maxConcurrency": 50,
+					"retryPolicy": {
+						"intervalInSeconds": 30
+					},
+					"dependsOn": []
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/DeltaCopyFromBlobPipeline')]"
+			]
+		}
+	]
+}
